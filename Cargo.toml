@@ -1,0 +1,32 @@
+[package]
+name = "spikenaut-ingest"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Multi-chain blockchain ingest with state-space interpolation: resamples heterogeneous signals (Dynex ~1Hz, Qubic ~0.2Hz, Quai ~0.08Hz) to 10Hz for SNN supervisors"
+repository = "https://github.com/rmems/spikenaut-ingest"
+keywords = ["snn", "blockchain", "interpolation", "neuromorphic", "mining"]
+categories = ["science", "algorithms", "asynchronous"]
+exclude = ["docs/"]
+
+[lib]
+name = "spikenaut_ingest"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"], optional = true }
+reqwest = { version = "0.11", features = ["json"], optional = true }
+
+[features]
+default = []
+async = ["tokio", "reqwest"]
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
