@@ -1,13 +1,13 @@
 //! # spikenaut-ingest
 //!
-//! Multi-chain blockchain ingest with state-space interpolation for SNN supervisors.
+//! Multi-chain blockchain data ingest with state-space interpolation for SNN supervisors.
 //!
 //! ## The Problem
 //!
 //! Blockchain data arrives at wildly different rates:
-//! - Dynex miner stats:  ~1 Hz
-//! - Qubic ticks:        ~0.2–0.5 Hz (2–5 second intervals)
-//! - Quai blocks:        ~0.08 Hz (12-second block time)
+//! - Dynex data:  ~1 Hz
+//! - Qubic data:  ~0.2–0.5 Hz (2–5 second intervals)
+//! - Quai data:   ~0.08 Hz (12-second intervals)
 //!
 //! An SNN supervisor running at 10 Hz sees identical values for 20–120 steps,
 //! then a sharp discontinuity — creating phantom spikes that drown real signal.
@@ -19,6 +19,18 @@
 //! x[k+1] = α · x[k] + (1 - α) · u[k]
 //! ```
 //! where `α = exp(-Δt / τ)` and `τ` is tuned per signal class.
+//!
+//! ## Integration Guide
+//!
+//! To integrate `spikenaut-ingest` into your SNN framework or LLM pipeline:
+//! 1. **Add Dependency**: Include `spikenaut-ingest` in your `Cargo.toml`.
+//!    ```toml
+//!    [dependencies]
+//!    spikenaut_ingest = "0.1.0"
+//!    ```
+//! 2. **Initialize Interpolator**: Use `ChannelInterpolator` or `InterpolatorBank` to smooth blockchain signals to 10Hz.
+//! 3. **Track Rewards**: Use `ConsensusRewardTracker` to convert blockchain events into dopamine spikes for reward-modulated learning.
+//! 4. **Feed Data**: Regularly update with `TripleSnapshot` instances containing raw blockchain data.
 //!
 //! ## Provenance
 //!

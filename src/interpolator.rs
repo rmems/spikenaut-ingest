@@ -1,9 +1,9 @@
-//! State-Space Interpolator — upsamples slow blockchain signals to 10Hz.
+//! State-Space Interpolator — upsamples slow signals to 10Hz.
 //!
 //! ## Background
 //!
-//! Blockchain data arrives at wildly different rates:
-//! - Dynex miner stats:  ~1 Hz
+//! Signals arrive at wildly different rates:
+//! - Dynex data:  ~1 Hz
 //! - Qubic ticks:        ~0.2–0.5 Hz (2–5 second intervals)
 //! - Quai blocks:        ~0.08 Hz (12-second block time)
 //!
@@ -29,8 +29,8 @@
 /// Time constant classes for different signal dynamics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignalClass {
-    /// Fast hardware signals (power, temp, hashrate): τ = 0.3s
-    /// Converges in ~1 second. Tracks GPU transients without aliasing.
+    /// Fast hardware signals (data rates): τ = 0.3s
+    /// Converges in ~1 second. Tracks transients without aliasing.
     Hardware,
     /// Medium blockchain signals (Qubic ticks, gas price): τ = 1.0s
     /// Converges in ~3 seconds. Smooths 2–5s tick jitter.
@@ -138,18 +138,18 @@ impl ChannelInterpolator {
 ///
 /// Channel layout:
 /// ```text
-///  0: Dynex hashrate (MH/s)         — Hardware
-///  1: Dynex power (W)               — Hardware
-///  2: Dynex GPU temp (°C)           — Hardware
-///  3: Qubic tick rate (ticks/s)     — Blockchain
-///  4: Qubic epoch progress [0,1]    — SlowChain
-///  5: QU price (USD)                — Blockchain
-///  6: Quai gas price (gwei)         — SlowChain
-///  7: Quai tx count                 — SlowChain
-///  8: Quai block utilization [0,1]  — SlowChain
-///  9: Neuraxon dopamine [0,1]       — Blockchain
-/// 10: Neuraxon serotonin [0,1]      — Blockchain
-/// 11: Neuraxon ITS (normalized)     — Blockchain
+///  0: Dynex data rate 1         — Hardware
+///  1: Dynex data rate 2         — Hardware
+///  2: Dynex data rate 3         — Hardware
+///  3: Qubic data rate 1         — Blockchain
+///  4: Qubic data rate 2         — SlowChain
+///  5: QU data rate 1            — Blockchain
+///  6: Quai data rate 1          — SlowChain
+///  7: Quai data rate 2          — SlowChain
+///  8: Quai data rate 3          — SlowChain
+///  9: Neuraxon signal 1         — Blockchain
+/// 10: Neuraxon signal 2         — Blockchain
+/// 11: Neuraxon signal 3         — Blockchain
 /// ```
 pub const NUM_BRIDGE_CHANNELS: usize = 12;
 
@@ -168,18 +168,18 @@ impl InterpolatorBank {
     pub fn new() -> Self {
         Self {
             channels: [
-                ChannelInterpolator::new(SignalClass::Hardware),    // 0 dynex hashrate
-                ChannelInterpolator::new(SignalClass::Hardware),    // 1 dynex power
-                ChannelInterpolator::new(SignalClass::Hardware),    // 2 dynex temp
-                ChannelInterpolator::new(SignalClass::Blockchain),  // 3 qubic tick rate
-                ChannelInterpolator::new(SignalClass::SlowChain),   // 4 qubic epoch
-                ChannelInterpolator::new(SignalClass::Blockchain),  // 5 qu price
-                ChannelInterpolator::new(SignalClass::SlowChain),   // 6 quai gas
-                ChannelInterpolator::new(SignalClass::SlowChain),   // 7 quai tx count
-                ChannelInterpolator::new(SignalClass::SlowChain),   // 8 quai block util
-                ChannelInterpolator::new(SignalClass::Blockchain),  // 9 neuraxon dopamine
-                ChannelInterpolator::new(SignalClass::Blockchain),  // 10 neuraxon serotonin
-                ChannelInterpolator::new(SignalClass::Blockchain),  // 11 neuraxon its
+                ChannelInterpolator::new(SignalClass::Hardware),    // 0 dynex data rate 1
+                ChannelInterpolator::new(SignalClass::Hardware),    // 1 dynex data rate 2
+                ChannelInterpolator::new(SignalClass::Hardware),    // 2 dynex data rate 3
+                ChannelInterpolator::new(SignalClass::Blockchain),  // 3 qubic data rate 1
+                ChannelInterpolator::new(SignalClass::SlowChain),   // 4 qubic data rate 2
+                ChannelInterpolator::new(SignalClass::Blockchain),  // 5 qu data rate 1
+                ChannelInterpolator::new(SignalClass::SlowChain),   // 6 quai data rate 1
+                ChannelInterpolator::new(SignalClass::SlowChain),   // 7 quai data rate 2
+                ChannelInterpolator::new(SignalClass::SlowChain),   // 8 quai data rate 3
+                ChannelInterpolator::new(SignalClass::Blockchain),  // 9 neuraxon signal 1
+                ChannelInterpolator::new(SignalClass::Blockchain),  // 10 neuraxon signal 2
+                ChannelInterpolator::new(SignalClass::Blockchain),  // 11 neuraxon signal 3
             ],
         }
     }
@@ -203,6 +203,12 @@ impl InterpolatorBank {
     /// Advance all channels one 10Hz step.
     pub fn step(&mut self) -> [f32; NUM_BRIDGE_CHANNELS] {
         let mut out = [0.0f32; NUM_BRIDGE_CHANNELS];
+        // TODO: Explore SIMD vectorization for parallel processing of channels.
+        // This could significantly boost performance for SNN loops.
+        let any_initialized = self.channels.iter().any(|ch| ch.is_initialized());
+        if !any_initialized {
+            return out; // Fast-path: no data observed yet, return zeros.
+        }
         for (i, ch) in self.channels.iter_mut().enumerate() {
             out[i] = ch.step();
         }
@@ -212,6 +218,10 @@ impl InterpolatorBank {
     /// Current values without advancing state.
     pub fn values(&self) -> [f32; NUM_BRIDGE_CHANNELS] {
         let mut out = [0.0f32; NUM_BRIDGE_CHANNELS];
+        let any_initialized = self.channels.iter().any(|ch| ch.is_initialized());
+        if !any_initialized {
+            return out; // Fast-path: no data observed yet, return zeros.
+        }
         for (i, ch) in self.channels.iter().enumerate() {
             out[i] = ch.value();
         }

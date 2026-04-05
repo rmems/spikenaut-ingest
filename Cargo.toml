@@ -3,9 +3,9 @@ name = "spikenaut-ingest"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-description = "Multi-chain blockchain ingest with state-space interpolation: resamples heterogeneous signals (Dynex ~1Hz, Qubic ~0.2Hz, Quai ~0.08Hz) to 10Hz for SNN supervisors"
+description = "Multi-chain blockchain data ingest with state-space interpolation for SNN supervisors"
 repository = "https://github.com/rmems/spikenaut-ingest"
-keywords = ["snn", "blockchain", "interpolation", "neuromorphic", "mining"]
+keywords = ["snn", "blockchain", "interpolation", "neuromorphic"]
 categories = ["science", "algorithms", "asynchronous"]
 exclude = ["docs/"]
 

@@ -12,8 +12,8 @@ pub struct TripleSnapshot {
     pub dynex_hashrate_mh: f32,
     pub dynex_power_w: f32,
     pub dynex_gpu_temp_c: f32,
-    /// True when a Dynex share was accepted this polling cycle.
-    pub dynex_share_found: bool,
+    /// True when a significant Dynex event occurs this polling cycle.
+    pub dynex_event: bool,
 
     // ── Qubic ──────────────────────────────────────────────────────────────
     pub qubic_tick_number: u64,
@@ -21,16 +21,16 @@ pub struct TripleSnapshot {
     pub qubic_tick_rate: f32,
     pub qubic_epoch_progress: f32,
     pub qu_price_usd: f32,
-    /// True when a Qubic computation solution was validated this cycle.
-    pub qubic_solution_found: bool,
+    /// True when a significant Qubic event occurs this cycle.
+    pub qubic_event: bool,
 
     // ── Quai ───────────────────────────────────────────────────────────────
     pub quai_gas_price: f32,
     pub quai_tx_count: u32,
     pub quai_block_utilization: f32,
     pub quai_staking_ratio: f32,
-    /// True when a Quai block was mined this polling cycle.
-    pub quai_block_mined: bool,
+    /// True when a significant Quai event occurs this polling cycle.
+    pub quai_event: bool,
 
     // ── Neuraxon (optional neuromodulator telemetry) ────────────────────────
     pub neuraxon_dopamine: f32,

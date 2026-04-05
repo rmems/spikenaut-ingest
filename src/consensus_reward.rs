@@ -1,20 +1,16 @@
-//! Consensus Reward — converts blockchain "successful solve" events into
-//! dopamine spikes for SNN reward-modulated learning.
+//! Consensus Reward — converts blockchain events into dopamine spikes for SNN reward-modulated learning.
 //!
 //! ## Key Insight
 //!
-//! When a local node validates a solution (Dynex share, Quai block, Qubic
-//! computation), that is the strongest possible reward signal — the GPU's
-//! electrical state at that moment was *provably optimal*. This is far more
-//! valuable than any synthetic reward function.
+//! When a significant blockchain event occurs, it can serve as a strong reward signal for SNN learning, indicating an optimal state at that moment. This is more valuable than synthetic reward functions.
 //!
 //! ## Reward Hierarchy
 //!
 //! | Event               | Magnitude | Frequency  | Analogy        |
 //! |---------------------|-----------|------------|----------------|
-//! | Qubic solution      | 1.0       | Rare       | Finding food   |
-//! | Quai block mined    | 0.8       | Occasional | Successful hunt|
-//! | Dynex share accepted| 0.3       | Frequent   | Foraging       |
+//! | Qubic event         | 1.0       | Rare       | Finding food   |
+//! | Quai event          | 0.8       | Occasional | Successful hunt|
+//! | Dynex event         | 0.3       | Frequent   | Foraging       |
 //!
 //! The dopamine spike decays with τ = 0.5s (5 steps at 10Hz),
 //! so the E-prop eligibility trace captures a ~1.5s credit window around the event.
@@ -27,8 +23,8 @@
 //! let mut tracker = ConsensusRewardTracker::new();
 //! let mut snap = TripleSnapshot::default();
 //!
-//! // Simulate a Dynex share
-//! snap.dynex_share_found = true;
+//! // Simulate a Dynex event
+//! snap.dynex_event = true;
 //! let dopamine = tracker.update(&snap);
 //! println!("Dopamine boost: {:.3}", dopamine);
 //! ```
@@ -42,9 +38,9 @@ const DOPAMINE_DECAY: f32 = 0.8187;
 /// Allows transient overshoot to make consensus events salient.
 pub const REWARD_CEILING: f32 = 1.5;
 
-const DYNEX_SHARE_REWARD: f32  = 0.3;
-const QUAI_BLOCK_REWARD: f32   = 0.8;
-const QUBIC_SOLUTION_REWARD: f32 = 1.0;
+const DYNEX_EVENT_REWARD: f32  = 0.3;
+const QUAI_EVENT_REWARD: f32   = 0.8;
+const QUBIC_EVENT_REWARD: f32 = 1.0;
 
 /// Tracks dopamine level from consensus reward events.
 ///
@@ -53,29 +49,29 @@ pub struct ConsensusRewardTracker {
     /// Current dopamine level [0.0, 1.0].
     dopamine: f32,
     /// Cumulative event counters for logging/diagnostics.
-    pub dynex_shares: u64,
-    pub quai_blocks: u64,
-    pub qubic_solutions: u64,
+    pub dynex_events: u64,
+    pub quai_events: u64,
+    pub qubic_events: u64,
 }
 
 impl ConsensusRewardTracker {
     pub fn new() -> Self {
-        Self { dopamine: 0.0, dynex_shares: 0, quai_blocks: 0, qubic_solutions: 0 }
+        Self { dopamine: 0.0, dynex_events: 0, quai_events: 0, qubic_events: 0 }
     }
 
     /// Process one 10Hz step: detect events and decay dopamine.
     ///
     /// Returns the current dopamine boost to add to `compute_reward()`.
     pub fn update(&mut self, snap: &TripleSnapshot) -> f32 {
-        if snap.qubic_solution_found {
-            self.dopamine = QUBIC_SOLUTION_REWARD;
-            self.qubic_solutions += 1;
-        } else if snap.quai_block_mined {
-            self.dopamine = self.dopamine.max(QUAI_BLOCK_REWARD);
-            self.quai_blocks += 1;
-        } else if snap.dynex_share_found {
-            self.dopamine = self.dopamine.max(DYNEX_SHARE_REWARD);
-            self.dynex_shares += 1;
+        if snap.qubic_event {
+            self.dopamine = QUBIC_EVENT_REWARD;
+            self.qubic_events += 1;
+        } else if snap.quai_event {
+            self.dopamine = self.dopamine.max(QUAI_EVENT_REWARD);
+            self.quai_events += 1;
+        } else if snap.dynex_event {
+            self.dopamine = self.dopamine.max(DYNEX_EVENT_REWARD);
+            self.dynex_events += 1;
         }
 
         // Exponential decay
@@ -103,8 +99,8 @@ impl ConsensusRewardTracker {
     /// One-line status for dashboard display.
     pub fn status_line(&self) -> String {
         format!(
-            "DA:{:.2} shares:{} blocks:{} sols:{}",
-            self.dopamine, self.dynex_shares, self.quai_blocks, self.qubic_solutions
+            "DA:{:.2} dynex:{} quai:{} qubic:{}",
+            self.dopamine, self.dynex_events, self.quai_events, self.qubic_events
         )
     }
 }
@@ -122,11 +118,11 @@ mod tests {
         let mut tracker = ConsensusRewardTracker::new();
         let mut snap = TripleSnapshot::default();
 
-        snap.dynex_share_found = true;
+        snap.dynex_event = true;
         let d = tracker.update(&snap);
-        assert!((d - DYNEX_SHARE_REWARD * DOPAMINE_DECAY).abs() < 0.01);
+        assert!((d - DYNEX_EVENT_REWARD * DOPAMINE_DECAY).abs() < 0.01);
 
-        snap.dynex_share_found = false;
+        snap.dynex_event = false;
         for _ in 0..50 { tracker.update(&snap); }
         assert!(tracker.dopamine() < 0.001, "should decay, got {}", tracker.dopamine());
     }
@@ -136,11 +132,11 @@ mod tests {
         let mut tracker = ConsensusRewardTracker::new();
         let mut snap = TripleSnapshot::default();
 
-        snap.dynex_share_found = true;
+        snap.dynex_event = true;
         tracker.update(&snap);
-        snap.dynex_share_found = false;
+        snap.dynex_event = false;
 
-        snap.qubic_solution_found = true;
+        snap.qubic_event = true;
         tracker.update(&snap);
         assert!(tracker.dopamine() > 0.8, "Qubic should dominate");
     }
@@ -150,7 +146,7 @@ mod tests {
         let mut tracker = ConsensusRewardTracker::new();
         let mut snap = TripleSnapshot::default();
 
-        snap.qubic_solution_found = true;
+        snap.qubic_event = true;
         tracker.update(&snap);
 
         let boosted = tracker.boost_reward(0.9);
@@ -163,14 +159,14 @@ mod tests {
         let mut tracker = ConsensusRewardTracker::new();
         let mut snap = TripleSnapshot::default();
 
-        snap.dynex_share_found = true;
+        snap.dynex_event = true;
         tracker.update(&snap);
         tracker.update(&snap);
-        assert_eq!(tracker.dynex_shares, 2);
+        assert_eq!(tracker.dynex_events, 2);
 
-        snap.dynex_share_found = false;
-        snap.quai_block_mined = true;
+        snap.dynex_event = false;
+        snap.quai_event = true;
         tracker.update(&snap);
-        assert_eq!(tracker.quai_blocks, 1);
+        assert_eq!(tracker.quai_events, 1);
     }
 }

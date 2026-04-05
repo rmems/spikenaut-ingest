@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">spikenaut-ingest</h1>
-<p align="center">Multi-chain blockchain ingest with state-space interpolation for SNN supervisors</p>
+<p align="center">Multi-chain blockchain data ingest with state-space interpolation for SNN supervisors</p>
 
 <p align="center">
   <a href="https://crates.io/crates/spikenaut-ingest"><img src="https://img.shields.io/crates/v/spikenaut-ingest" alt="crates.io"></a>
@@ -19,6 +19,29 @@ that create phantom spikes drowning real signal. This crate fixes that with
 first-order state-space interpolation: `x[k+1] = α·x[k] + (1−α)·u[k]`.
 
 ## Features
+
+- `ChannelInterpolator` — single-channel IIR smoother, α tuned per `SignalClass`
+- `InterpolatorBank` — 12-channel bank (~192 bytes on stack, zero allocation)
+- `SignalClass` — `Hardware` (α=0.72), `Blockchain` (α=0.90), `SlowChain` (α=0.97)
+- `ConsensusRewardTracker` — EMA-smoothed composite reward from multi-chain activity
+- `TripleSnapshot` — unified Dynex/Qubic/Quai observation struct
+
+## Core Responsibilities
+
+- **Acquire raw inputs** from sensors, system telemetry, and optional external feeds.
+- **Normalize & sanitize** values into stable numeric ranges.
+- **Map named fields** into a deterministic channel vector (`[f32; N]` ABI).
+- **Buffer & align** samples in time (timestamps, sample rates, windows).
+- **Export snapshots** in a compact, testable format for encoders & simulators.
+- **Provide utilities** such as migration helpers, golden fixtures, and CI smoke examples.
+
+## Why It Matters for SNN / LLM Fusion
+
+- **Deterministic inputs** let encoders pre-allocate and map channels to neurons without runtime guessing.
+- **Normalization** guarantees consistent value ranges across machines and datasets.
+- **Fixed ordering** (the 12-channel layout) acts as a contract every repo can rely on, simplifying fusion and hardware export.
+- **Separation of concerns** keeps ingestion pure; hardware/ML logic lives in other crates, making each repo easier to review and license-clean.
+
 
 - `ChannelInterpolator` — single-channel IIR smoother, α tuned per `SignalClass`
 - `InterpolatorBank` — 12-channel bank (~192 bytes on stack, zero allocation)
@@ -58,10 +81,10 @@ for _ in 0..50 {
 use spikenaut_ingest::InterpolatorBank;
 
 let mut bank = InterpolatorBank::default();
-// Channels 0–3: Hardware (GPU/CPU, α=0.72)
-// Channels 4–7: Blockchain (Dynex/Qubic, α=0.90)
-// Channels 8–11: SlowChain (Quai blocks, α=0.97)
-bank.channels[4].observe(95.0);   // Dynex hashrate
+// Channels 0–3: Hardware (Dynex data, α=0.72)
+// Channels 4–7: Blockchain (Qubic data, α=0.90)
+// Channels 8–11: SlowChain (Quai data, α=0.97)
+bank.channels[4].observe(95.0);   // Qubic data rate
 let smooth = bank.channels[4].step();
 ```
 
